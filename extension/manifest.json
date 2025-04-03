@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "OneTabPro",
+  "version": "0.1.0",
+  "description": "高效管理浏览器标签页，并通过微信登录在多设备间同步",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "permissions": [
+    "tabs",
+    "storage",
+    "unlimitedStorage"
+  ],
+  "host_permissions": [
+    "https://*.onetabpro.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  }
+} 
