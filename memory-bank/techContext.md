@@ -1,253 +1,491 @@
 # OneTabPro 技术背景
 
-## 技术栈
+## 技术堆栈
 
 ### 前端 (Chrome 扩展)
 
-- **框架**: 使用 TypeScript 的 React
-- **构建工具**: Vite (用于快速开发和优化构建)
-- **状态管理**: 使用 useReducer 的 React Context API
-- **样式**: 用于实用优先样式的 TailwindCSS
-- **Chrome API**: Chrome 扩展 Manifest V3 APIs
-- **HTTP 客户端**: 用于 API 请求的 Axios
-- **测试**: Jest 和 React Testing Library
+- **主要语言:** TypeScript
+- **UI 框架:** React 18
+- **样式解决方案:** Tailwind CSS
+- **状态管理:** React 上下文 API + 钩子
+- **构建工具:** Vite
+- **网络请求:** Axios
+- **Chrome API:** tabs, storage, runtime
 
 ### 后端
 
-- **运行时**: 使用 TypeScript 的 Node.js
-- **框架**: Hono.js (轻量级，为 Serverless/Edge 环境优化)
-- **认证**: 用于基于令牌认证的 JWT
-- **API 文档**: OpenAPI/Swagger
-- **验证**: 用于模式验证的 Zod
-- **测试**: 用于单元和集成测试的 Vitest
+- **语言:** Node.js (TypeScript)
+- **API 框架:** Hono.js
+- **部署环境:** Vercel Serverless Functions
+- **认证:** JWT (jsonwebtoken)
+- **验证:** Zod
 
 ### 数据库
 
-- **数据库**: Neon PostgreSQL (Serverless)
-- **ORM**: 用于类型安全数据库查询的 Prisma
-- **迁移**: 用于架构变更的 Prisma Migrate
-- **连接**: Neon Serverless Driver
+- **服务:** Neon (Serverless PostgreSQL)
+- **ORM:** Prisma
+- **连接管理:** Prisma Client + Neon 连接池
 
-### DevOps 和基础设施
+### 认证
 
-- **托管**: 用于 serverless 函数的 Vercel 或 Netlify
-- **版本控制**: 使用 GitHub 的 Git
-- **CI/CD**: 用于自动化测试和部署的 GitHub Actions
-- **监控**: Vercel Analytics 或自定义日志解决方案
-- **环境变量**: 通过平台密钥管理
+- **主要方式:** 微信扫码登录 (OAuth 2.0)
+- **令牌管理:** JWT + chrome.storage.local
+- **会话处理:** 无状态 (基于令牌)
 
-### 第三方集成
+## 项目架构
 
-- **认证**: 微信 OAuth 2.0
-- **网站图标获取**: Google Favicon 服务或类似服务
+### 扩展架构
 
-## 开发环境设置
+扩展项目遵循 Chrome 扩展 Manifest V3 架构，包括：
 
-### 前提条件
+1. **核心组件:**
 
-- Node.js LTS 版本 (16.x 或更高)
-- npm 或 yarn
-- Git
-- 用于扩展测试的 Chrome 浏览器
-- 用于 OAuth 集成的微信开发者账户
+   - **Manifest:** 配置文件 (manifest.json)
+   - **背景脚本:** 处理事件和 API 调用 (background.js)
+   - **弹出 UI:** 提供用户交互界面 (popup.html + React)
+   - **内容脚本:** 与网页交互 (尚未实现)
 
-### 本地开发环境
+2. **目录结构:**
 
-1. **扩展开发**:
+   ```
+   extension/
+   ├── public/             # 静态资源
+   │   └── icons/          # 扩展图标
+   ├── src/
+   │   ├── background/     # 后台 Service Worker
+   │   ├── components/     # 可复用 UI 组件
+   │   ├── hooks/          # 自定义 React Hooks
+   │   ├── popup/          # 弹出页面组件
+   │   ├── services/       # API 和服务封装
+   │   ├── types/          # TypeScript 类型定义
+   │   └── utils/          # 工具函数
+   ├── manifest.json       # 扩展配置
+   ├── popup.html          # 弹出页面入口
+   ├── tsconfig.json       # TypeScript 配置
+   └── vite.config.ts      # Vite 构建配置
+   ```
 
-   - 具有 HMR 的本地开发服务器，用于 UI 更改
-   - 从 `dist` 文件夹加载 Chrome 扩展
-   - 用于本地与生产 API 端点的环境变量
+3. **关键技术实现:**
+   - **标签页管理:** 使用 chrome.tabs API 查询、创建和关闭标签页
+   - **数据存储:** 使用 chrome.storage.local 存储标签组和认证信息
+   - **UI 渲染:** 使用 React 渲染可交互的弹出界面
+   - **API 通信:** 使用 Axios 与后端 API 通信
 
-2. **API 开发**:
+### API 服务架构
 
-   - 具有自动重启功能的本地开发服务器
-   - 连接到开发 Neon 数据库实例
-   - 用于登录测试的模拟微信 OAuth
+API 服务基于 Hono.js 框架实现，采用 RESTful 设计原则：
 
-3. **数据库开发**:
-   - 独立的开发数据库实例
-   - 用于数据库可视化的 Prisma Studio
-   - 用于测试场景的种子数据
+1. **核心组件:**
 
-### 仓库结构
+   - **应用实例:** 基于 Hono 创建的应用
+   - **中间件:** 认证、错误处理、CORS
+   - **路由:** 按资源组织的路由组
+   - **控制器:** 处理业务逻辑
+   - **服务层:** 封装数据访问和业务规则
 
-```
-onetabpro/
-├── extension/             # Chrome 扩展代码
-│   ├── public/            # 静态资源
-│   │   ├── background/    # 后台脚本
-│   │   ├── components/    # React 组件
-│   │   ├── hooks/         # 自定义 React hooks
-│   │   ├── popup/         # 弹出式 UI
-│   │   ├── services/      # API 和其他服务
-│   │   ├── types/         # TypeScript 类型
-│   │   └── utils/         # 辅助工具
-│   ├── manifest.json      # 扩展清单
-│   └── package.json       # 依赖项
-│
-├── api/                   # 后端 API 代码
-│   ├── src/
-│   │   ├── controllers/   # 请求处理器
-│   │   ├── middlewares/   # Express 中间件
-│   │   ├── models/        # 数据模型
-│   │   ├── routes/        # API 路由
-│   │   ├── services/      # 业务逻辑
-│   │   └── utils/         # 辅助函数
-│   ├── prisma/            # Prisma 架构和迁移
-│   └── package.json       # 依赖项
-│
-└── web/                   # (可选) Web 客户端
-    ├── public/            # 静态资源
-    ├── src/               # React 组件和逻辑
-    └── package.json       # 依赖项
-```
+2. **目录结构:**
 
-## 技术限制
+   ```
+   api/
+   ├── prisma/             # Prisma ORM 相关
+   │   └── schema.prisma   # 数据库模型定义
+   ├── src/
+   │   ├── controllers/    # 控制器
+   │   ├── middlewares/    # 中间件
+   │   ├── models/         # 数据模型
+   │   ├── routes/         # 路由定义
+   │   ├── services/       # 业务服务
+   │   ├── utils/          # 工具函数
+   │   └── index.ts        # 应用入口
+   ├── .env.example        # 环境变量示例
+   ├── package.json        # 项目配置
+   └── tsconfig.json       # TypeScript 配置
+   ```
 
-### Chrome 扩展限制
+3. **API 端点设计:**
 
-1. **Manifest V3 限制**:
+   - **/api/auth/**: 认证相关端点
+     - POST /wechat-callback: 处理微信登录回调
+     - GET /validate: 验证 JWT 令牌
+   - **/api/tab-groups/**: 标签组管理
+     - GET /: 获取用户的所有标签组
+     - POST /: 创建新标签组
+     - GET /:id: 获取特定标签组
+     - PUT /:id: 更新标签组
+     - DELETE /:id: 删除标签组
+   - **/api/users/**: 用户管理
+     - GET /me: 获取当前用户信息
+     - PUT /me: 更新用户信息
+     - GET /stats: 获取用户统计信息
 
-   - 使用 service workers 而非后台页面
-   - 后台脚本的有限执行时间
-   - 内容脚本限制
-   - 跨域请求限制
+4. **标签组管理 API 实现:**
 
-2. **存储限制**:
+   已实现完整的标签组 CRUD 操作，主要特点包括：
 
-   - `chrome.storage` 大小限制
-   - 本地存储配额
+   - **认证中间件集成:**
 
-3. **安全限制**:
-   - 内容安全政策限制
-   - 跨域隔离考虑
+     ```typescript
+     // 应用认证中间件到所有标签组路由
+     app.use("/tab-groups/*", authMiddleware);
+     ```
 
-### Neon PostgreSQL 考虑事项
+   - **获取所有标签组:**
 
-1. **Serverless 数据库限制**:
+     ```typescript
+     app.get("/tab-groups", async (c) => {
+       const userId = c.get("userId");
+       // 查询用户所有标签组，包括关联的标签页
+       const tabGroups = await prisma.tabGroup.findMany({
+         where: { userId },
+         include: { tabs: true },
+         orderBy: { createdAt: "desc" },
+       });
+       return c.json({ success: true, data: tabGroups });
+     });
+     ```
 
-   - 连接池要求
-   - 冷启动延迟
-   - 查询的成本优化
+   - **创建新标签组:**
 
-2. **数据访问模式**:
-   - 优化读取密集型工作负载
-   - 最小化连接开销
-   - 索引优化
+     ```typescript
+     app.post("/tab-groups", async (c) => {
+       // 使用Zod验证请求数据
+       const schema = z.object({
+         name: z.string().min(1).max(100),
+         tabs: z.array(
+           z.object({
+             title: z.string(),
+             url: z.string().url(),
+             favicon: z.string().optional(),
+           })
+         ),
+       });
 
-### 微信 OAuth 限制
+       const result = schema.safeParse(await c.req.json());
+       if (!result.success) {
+         return c.json(
+           {
+             success: false,
+             error: {
+               code: "VALIDATION_ERROR",
+               message: "请求数据无效",
+             },
+           },
+           400
+         );
+       }
 
-1. **认证流程**:
+       const { name, tabs } = result.data;
+       const userId = c.get("userId");
 
-   - 二维码过期时间
-   - 回调 URL 要求
-   - 速率限制考虑
+       // 创建标签组和关联的标签页
+       const tabGroup = await prisma.tabGroup.create({
+         data: {
+           name,
+           userId,
+           tabs: {
+             create: tabs.map((tab, index) => ({
+               ...tab,
+               position: index,
+             })),
+           },
+         },
+         include: { tabs: true },
+       });
 
-2. **用户数据访问**:
-   - 有限的用户配置信息
-   - 范围限制
-   - 遵守微信政策
+       return c.json({ success: true, data: tabGroup }, 201);
+     });
+     ```
+
+   - **获取特定标签组:**
+
+     ```typescript
+     app.get("/tab-groups/:id", async (c) => {
+       const id = c.req.param("id");
+       const userId = c.get("userId");
+
+       // 查询特定标签组，确保属于当前用户
+       const tabGroup = await prisma.tabGroup.findUnique({
+         where: { id, userId },
+         include: { tabs: true },
+       });
+
+       if (!tabGroup) {
+         return c.json(
+           {
+             success: false,
+             error: {
+               code: "NOT_FOUND",
+               message: "标签组不存在",
+             },
+           },
+           404
+         );
+       }
+
+       return c.json({ success: true, data: tabGroup });
+     });
+     ```
+
+   - **更新标签组:**
+
+     ```typescript
+     app.put("/tab-groups/:id", async (c) => {
+       const id = c.req.param("id");
+       const userId = c.get("userId");
+
+       // 先验证标签组存在且属于当前用户
+       const existingTabGroup = await prisma.tabGroup.findUnique({
+         where: { id, userId },
+       });
+
+       if (!existingTabGroup) {
+         return c.json(
+           {
+             success: false,
+             error: {
+               code: "NOT_FOUND",
+               message: "标签组不存在",
+             },
+           },
+           404
+         );
+       }
+
+       // 验证请求数据
+       const schema = z.object({
+         name: z.string().min(1).max(100),
+         isLocked: z.boolean().optional(),
+         isStarred: z.boolean().optional(),
+       });
+
+       const result = schema.safeParse(await c.req.json());
+       if (!result.success) {
+         return c.json(
+           {
+             success: false,
+             error: {
+               code: "VALIDATION_ERROR",
+               message: "请求数据无效",
+             },
+           },
+           400
+         );
+       }
+
+       // 更新标签组
+       const updatedTabGroup = await prisma.tabGroup.update({
+         where: { id },
+         data: result.data,
+         include: { tabs: true },
+       });
+
+       return c.json({ success: true, data: updatedTabGroup });
+     });
+     ```
+
+   - **删除标签组:**
+
+     ```typescript
+     app.delete("/tab-groups/:id", async (c) => {
+       const id = c.req.param("id");
+       const userId = c.get("userId");
+
+       // 验证标签组存在且属于当前用户
+       const existingTabGroup = await prisma.tabGroup.findUnique({
+         where: { id, userId },
+       });
+
+       if (!existingTabGroup) {
+         return c.json(
+           {
+             success: false,
+             error: {
+               code: "NOT_FOUND",
+               message: "标签组不存在或无权访问",
+             },
+           },
+           404
+         );
+       }
+
+       // 删除标签组 (关联的标签页会自动级联删除)
+       await prisma.tabGroup.delete({
+         where: { id },
+       });
+
+       return c.json({
+         success: true,
+         data: { message: "标签组已成功删除" },
+       });
+     });
+     ```
+
+   - **错误处理:**
+     ```typescript
+     try {
+       // 操作逻辑
+     } catch (error) {
+       console.error("标签组操作错误:", error);
+       return c.json(
+         {
+           success: false,
+           error: {
+             code: "SERVER_ERROR",
+             message: "服务器处理请求时出错",
+           },
+         },
+         500
+       );
+     }
+     ```
+
+5. **认证流程:**
+   - 用户发起微信登录
+   - 显示二维码给用户扫描
+   - 微信服务器回调 API 服务
+   - API 服务创建/查找用户并生成 JWT
+   - 客户端存储 JWT 并用于认证后续请求
+
+### 数据库架构
+
+使用 Prisma ORM 定义的数据库模型：
+
+1. **核心表:**
+
+   - **用户表 (users):** 存储用户信息和微信认证数据
+   - **标签组表 (tab_groups):** 存储标签页组合
+   - **标签页表 (tabs):** 存储个别标签页信息
+
+2. **模型关系:**
+
+   - 用户 1:N 标签组 (一个用户可以有多个标签组)
+   - 标签组 1:N 标签页 (一个标签组可以包含多个标签页)
+
+3. **模型定义:**
+
+   ```prisma
+   // 用户表
+   model User {
+     id            String     @id @default(uuid())
+     wechatOpenId  String     @unique
+     wechatUnionId String?    @unique
+     nickname      String
+     avatarUrl     String
+     createdAt     DateTime   @default(now())
+     updatedAt     DateTime   @updatedAt
+     lastLoginAt   DateTime   @default(now())
+     tabGroups     TabGroup[]
+
+     @@map("users")
+   }
+
+   // 标签组表
+   model TabGroup {
+     id        String   @id @default(uuid())
+     name      String
+     isLocked  Boolean  @default(false)
+     isStarred Boolean  @default(false)
+     createdAt DateTime @default(now())
+     updatedAt DateTime @updatedAt
+     userId    String
+     user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+     tabs      Tab[]
+
+     @@index([userId])
+     @@map("tab_groups")
+   }
+
+   // 标签页表
+   model Tab {
+     id        String   @id @default(uuid())
+     url       String
+     title     String
+     favicon   String?
+     position  Int
+     addedAt   DateTime @default(now())
+     groupId   String
+     group     TabGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+     @@index([groupId])
+     @@map("tabs")
+   }
+   ```
+
+## 开发环境
+
+1. **本地开发:**
+
+   - **包管理器:** npm
+   - **TypeScript 编译器:** tsc + Vite TS 插件
+   - **代码风格:** ESLint + TypeScript ESLint
+   - **API 测试:** 手动测试 / 未来将添加自动化测试
+   - **数据库:** Neon 远程 + Prisma Studio 本地管理
+
+2. **构建过程:**
+
+   - **扩展:** TypeScript -> Vite -> Chrome 扩展包
+   - **API:** TypeScript -> tsc/tsx -> Node.js
+
+3. **部署流程:**
+   - **API:** 部署到 Vercel
+   - **扩展:** 分发到 Chrome Web Store (未来)
+   - **数据库:** 托管在 Neon
 
 ## 安全考虑
 
-### 数据安全
+1. **认证安全:**
 
-1. **用户数据保护**:
+   - JWT 令牌的安全存储
+   - 适当的令牌过期时间
+   - 微信回调验证
+   - HTTPS 所有 API 通信
 
-   - 没有未经明确同意存储敏感浏览历史
-   - 存储标签数据的加密
-   - 用户对数据保留的控制
+2. **数据安全:**
 
-2. **认证安全**:
+   - 资源访问控制
+   - 用户数据隔离
+   - 输入验证和净化
+   - 防止 SQL 注入 (通过 Prisma)
 
-   - 扩展中的安全令牌存储
-   - 令牌轮换和过期
-   - 防止令牌盗窃
+3. **扩展安全:**
+   - 遵循 Chrome 扩展内容安全策略
+   - 最小化权限请求
+   - 安全处理用户数据
 
-3. **API 安全**:
-   - 速率限制以防滥用
-   - 所有端点的输入验证
-   - 适当的错误处理，防止信息泄露
+## 性能优化
 
-### 扩展安全
+1. **扩展性能:**
 
-1. **内容安全政策**:
+   - 本地缓存标签组数据
+   - 延迟加载资源
+   - 最小化主线程工作
 
-   - 限制性 CSP 以防 XSS
-   - 最小权限模型
-   - 安全的扩展通信
+2. **API 性能:**
 
-2. **代码安全**:
-   - 定期依赖更新
-   - 开发过程中的安全 linting
-   - 安全问题的代码审查
+   - Serverless 环境优化
+   - 有效的数据库查询
+   - 适当的缓存策略
 
-## 性能考虑
+3. **数据库性能:**
+   - 索引优化
+   - 分页查询
+   - 连接池管理
 
-### 扩展性能
+## 技术挑战
 
-1. **启动时间**:
+1. **微信 OAuth 在扩展中的集成:**
 
-   - 最小包大小
-   - 高效的后台 service worker
-   - 非关键组件的延迟加载
+   - 处理回调和重定向
+   - 二维码显示和扫描流程
+   - 无缝的用户体验
 
-2. **标签页操作**:
-   - 多个标签页的批处理
-   - 高容量操作的节流
-   - 高效的 DOM 操作
+2. **多设备同步:**
 
-### API 性能
+   - 冲突解决策略
+   - 增量同步实现
+   - 大型数据集的同步性能
 
-1. **请求优化**:
-
-   - 大数据集的分页
-   - 响应压缩
-   - 缓存策略
-
-2. **数据库效率**:
-   - 频繁查询的适当索引
-   - 查询优化
-   - 连接池
-
-## 开发工作流
-
-### 代码标准
-
-1. **Linting 和格式化**:
-
-   - 用于代码质量的 ESLint
-   - 用于代码格式化的 Prettier
-   - TypeScript 严格模式
-
-2. **测试要求**:
-   - 关键函数的单元测试
-   - API 端点的集成测试
-   - 关键用户流程的 E2E 测试
-
-### 开发过程
-
-1. **功能开发**:
-
-   - 功能分支工作流
-   - 拉取请求审查
-   - 合并前的 CI 验证
-
-2. **发布过程**:
-   - 语义化版本控制
-   - 更新日志维护
-   - 扩展版本更新
-
-### 文档
-
-1. **代码文档**:
-
-   - 函数的 JSDoc 注释
-   - 组件的 README 文件
-   - 架构文档
-
-2. **API 文档**:
-   - OpenAPI/Swagger 定义
-   - 端点文档
-   - 认证指南
+3. **扩展限制:**
+   - Manifest V3 的 Service Worker 生命周期限制
+   - 跨域资源共享考虑
+   - 扩展存储容量限制
