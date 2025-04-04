@@ -1,0 +1,47 @@
+{
+  "manifest_version": 3,
+  "name": "OneTabPro",
+  "version": "1.0.0",
+  "description": "一个强大的标签页管理器，支持离线和在线同步",
+  "permissions": [
+    "tabs",
+    "storage",
+    "unlimitedStorage",
+    "contextMenus"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "images/icon-16.png",
+      "48": "images/icon-48.png",
+      "128": "images/icon-128.png"
+    },
+    "default_title": "OneTabPro - 管理您的标签页"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "icons": {
+    "16": "images/icon-16.png",
+    "48": "images/icon-48.png",
+    "128": "images/icon-128.png"
+  },
+  "commands": {
+    "collect-tabs": {
+      "suggested_key": {
+        "default": "Alt+Shift+O"
+      },
+      "description": "收集当前窗口的标签页"
+    }
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["images/*", "*.html"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+} 

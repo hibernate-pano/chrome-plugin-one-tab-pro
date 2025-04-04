@@ -1,0 +1,12 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+cd extension
+npm run lint
+npm run type-check
+npm run test
+
+cd ../api
+npm run lint
+npm run type-check
+npm run test 

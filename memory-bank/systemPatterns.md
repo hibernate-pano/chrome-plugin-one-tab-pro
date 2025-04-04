@@ -1,228 +1,486 @@
 # OneTabPro 系统模式
 
-## 系统架构
+## 系统架构概述
 
-OneTabPro 遵循客户端-服务器架构，包含以下组件：
-
-```mermaid
-graph TD
-    A[Chrome 扩展] -- API 请求 --> B[后端 API]
-    B -- 数据操作 --> C[(Neon PostgreSQL)]
-    D[微信认证服务] -- OAuth 流程 --> B
-    E[Web 客户端] -- API 请求 --> B
-
-    subgraph "客户端"
-        A
-        E
-    end
-
-    subgraph "服务器端"
-        B
-        D
-    end
-
-    subgraph "数据存储"
-        C
-    end
-```
-
-### 关键组件
-
-1. **Chrome 扩展 (客户端)**
-
-   - 标签页管理用户界面
-   - 本地状态管理
-   - API 通信层
-   - 认证处理器
-
-2. **后端 API (服务器)**
-
-   - 数据操作的 RESTful 端点
-   - 认证和授权
-   - 微信 OAuth 集成
-   - 数据验证和业务逻辑
-
-3. **Neon PostgreSQL (数据库)**
-
-   - 无服务器 PostgreSQL 数据库
-   - 存储用户数据、标签组和标签页
-   - 处理数据持久化和查询
-
-4. **Web 客户端 (可选)**
-   - 查看已保存标签页的替代界面
-   - 与扩展共享 API 通信
-
-## 设计模式
-
-### 扩展架构
-
-Chrome 扩展遵循模块化架构：
+OneTabPro 采用模块化架构，包含扩展端和API服务端两个主要部分。扩展端负责用户界面、标签页操作和本地数据管理，API服务端负责云存储、认证和数据同步。系统设计遵循"离线优先"原则，确保基本功能在无网络或未登录状态下也能正常使用。
 
 ```mermaid
 graph TD
-    A[后台脚本] -- 状态更新 --> B[弹出式 UI]
-    A -- 消息传递 --> C[内容脚本]
-    A -- API 调用 --> D[API 服务]
-    D -- 认证 --> E[认证服务]
-    B -- 用户操作 --> F[标签页管理器]
-    F -- 标签页操作 --> A
+    User[用户] -->|使用| ChromeExt[Chrome扩展]
+    ChromeExt -->|本地数据| LocalStorage[Chrome存储]
+    ChromeExt -->|认证请求| Auth[认证服务]
+    ChromeExt -->|数据同步| API[API服务]
+    API -->|存储数据| Database[(PostgreSQL数据库)]
+    Auth -->|验证| WechatOAuth[微信OAuth]
+    
+    subgraph 扩展端
+    ChromeExt
+    LocalStorage
+    end
+    
+    subgraph 服务端
+    Auth
+    API
+    Database
+    end
+    
+    subgraph 外部服务
+    WechatOAuth
+    end
 ```
 
-1. **后台脚本模式**
+## 离线与在线模式架构
 
-   - 处理事件的长期运行脚本
-   - 维护扩展状态
-   - 协调各组件之间的通信
-   - 管理标签页操作
+系统设计支持两种主要运行模式：离线模式和在线模式。
 
-2. **UI 组件模式**
-
-   - React 组件层次结构
-   - 单向数据流
-   - 容器/展示组件模式
-
-3. **服务层模式**
-   - 用于后端通信的 API 服务
-   - 用于令牌管理的认证服务
-   - 用于浏览器操作的标签页服务
-
-### 后端架构
-
-后端遵循分层架构，明确关注点分离：
+### 离线模式架构
 
 ```mermaid
 graph TD
-    A[API 路由] --> B[控制器]
-    B --> C[服务]
-    C --> D[数据访问]
-    D --> E[(数据库)]
-
-    F[中间件] --> A
-    G[认证模块] --> F
+    User[用户] -->|使用| UI[扩展UI]
+    UI -->|管理标签| TabManager[标签管理器]
+    TabManager -->|读写数据| LocalStorage[Chrome本地存储]
+    
+    subgraph 扩展端
+    UI
+    TabManager
+    LocalStorage
+    end
+    
+    TabManager -->|收集标签| ChromeTabAPI[Chrome标签API]
+    TabManager -->|恢复标签| ChromeTabAPI
 ```
 
-1. **控制器-服务-仓库模式**
+### 在线模式架构
 
-   - 控制器处理 HTTP 请求/响应
-   - 服务包含业务逻辑
-   - 仓库管理数据访问
+```mermaid
+graph TD
+    User[用户] -->|使用| UI[扩展UI]
+    UI -->|管理标签| TabManager[标签管理器]
+    TabManager -->|读写数据| LocalStorage[Chrome本地存储]
+    TabManager -->|同步数据| SyncService[同步服务]
+    SyncService -->|API请求| APIService[API服务]
+    
+    subgraph 扩展端
+    UI
+    TabManager
+    LocalStorage
+    SyncService
+    end
+    
+    APIService -->|存储数据| Database[(PostgreSQL数据库)]
+```
 
-2. **中间件模式**
+## 核心组件
 
-   - 认证中间件
-   - 请求验证
-   - 错误处理
-   - 日志记录和监控
+### 1. 标签管理器 (TabManager)
 
-3. **JWT 认证模式**
-   - 基于令牌的认证
-   - 无状态授权
-   - 安全令牌存储
+标签管理器是系统的核心组件，负责标签页的收集、组织和恢复。
+
+#### 责任:
+- 收集当前窗口或所有窗口的标签页
+- 将标签页保存到本地存储
+- 从本地存储恢复标签页
+- 管理标签组织，包括命名、排序等
+
+#### 接口:
+```typescript
+interface TabManager {
+  // 收集所有标签页并关闭原标签
+  collectTabs(windowId?: number, excludeCurrentTab?: boolean): Promise<TabGroup>;
+  
+  // 恢复单个标签页
+  restoreTab(tabId: string): Promise<boolean>;
+  
+  // 恢复整个标签组
+  restoreGroup(groupId: string): Promise<boolean>;
+  
+  // 获取所有标签组
+  getTabGroups(): Promise<TabGroup[]>;
+  
+  // 创建新标签组
+  createTabGroup(name: string, tabs: Tab[]): Promise<TabGroup>;
+  
+  // 更新标签组
+  updateTabGroup(groupId: string, updates: Partial<TabGroup>): Promise<boolean>;
+  
+  // 删除标签组
+  deleteTabGroup(groupId: string): Promise<boolean>;
+}
+```
+
+### 2. 存储服务 (StorageService)
+
+存储服务负责离线数据的持久化，在离线和在线模式下都起关键作用。
+
+#### 责任:
+- 将标签数据保存到Chrome本地存储
+- 从本地存储读取标签数据
+- 管理存储限制和数据压缩
+- 处理数据迁移和版本控制
+
+#### 接口:
+```typescript
+interface StorageService {
+  // 保存数据到本地存储
+  save<T>(key: string, data: T): Promise<void>;
+  
+  // 从本地存储读取数据
+  get<T>(key: string): Promise<T | null>;
+  
+  // 从本地存储删除数据
+  remove(key: string): Promise<void>;
+  
+  // 清空所有数据
+  clear(): Promise<void>;
+  
+  // 检查存储使用情况
+  getStorageUsage(): Promise<{used: number, available: number}>;
+}
+```
+
+### 3. 同步服务 (SyncService)
+
+同步服务在用户登录时负责本地数据与云端的同步。
+
+#### 责任:
+- 检测用户登录状态变化
+- 在用户首次登录时迁移本地数据
+- 定期将本地更改同步到云端
+- 处理同步冲突
+- 从云端拉取更新
+
+#### 接口:
+```typescript
+interface SyncService {
+  // 初始化同步服务
+  initialize(): Promise<void>;
+  
+  // 触发手动同步
+  syncNow(): Promise<SyncResult>;
+  
+  // 设置自动同步间隔
+  setAutoSyncInterval(intervalInMinutes: number): void;
+  
+  // 获取上次同步状态
+  getLastSyncStatus(): SyncStatus;
+  
+  // 处理冲突
+  resolveConflict(conflictStrategy: ConflictStrategy): Promise<void>;
+}
+```
+
+### 4. 认证服务 (AuthService)
+
+认证服务管理用户的身份验证和登录状态，在在线模式下使用。
+
+#### 责任:
+- 启动微信OAuth认证流程
+- 管理访问令牌和刷新令牌
+- 验证用户会话状态
+- 处理登录和登出
+
+#### 接口:
+```typescript
+interface AuthService {
+  // 检查当前登录状态
+  isLoggedIn(): boolean;
+  
+  // 启动登录流程
+  login(): Promise<boolean>;
+  
+  // 登出
+  logout(): Promise<void>;
+  
+  // 获取当前用户信息
+  getCurrentUser(): User | null;
+  
+  // 获取身份验证令牌
+  getToken(): string | null;
+  
+  // 注册认证状态变更监听器
+  onAuthStateChanged(listener: (user: User | null) => void): () => void;
+}
+```
+
+### 5. 用户界面组件 (UI Components)
+
+#### 主要UI组件:
+
+- **PopupComponent**: 扩展图标点击后显示的弹出窗口
+- **TabListComponent**: 显示保存的标签页列表
+- **TabGroupComponent**: 显示标签组及其操作
+- **SettingsComponent**: 用户设置和首选项管理
+- **LoginComponent**: 用户登录和账户管理
+
+#### 状态管理:
+
+系统使用React Context API进行状态管理，主要包含以下Context:
+
+```typescript
+// 标签状态上下文
+const TabContext = createContext<{
+  tabGroups: TabGroup[];
+  activeGroup: string | null;
+  loading: boolean;
+  actions: TabContextActions;
+}>({...});
+
+// 认证状态上下文
+const AuthContext = createContext<{
+  user: User | null;
+  isLoggedIn: boolean;
+  isOnline: boolean;
+  actions: AuthContextActions;
+}>({...});
+
+// 设置上下文
+const SettingsContext = createContext<{
+  settings: Settings;
+  actions: SettingsContextActions;
+}>({...});
+```
 
 ## 数据模型
 
-### 核心数据实体
+### 核心数据结构
 
-```mermaid
-erDiagram
-    USERS {
-        uuid id PK
-        string wechat_openid
-        string wechat_unionid
-        string nickname
-        string avatar_url
-        timestamp created_at
-        timestamp last_login_at
-    }
+```typescript
+// 标签页
+interface Tab {
+  id: string;          // 唯一标识符
+  url: string;         // 标签页URL
+  title: string;       // 标签页标题
+  favicon?: string;    // 图标URL
+  createdAt: number;   // 创建时间戳
+}
 
-    TAB_GROUPS {
-        uuid id PK
-        uuid user_id FK
-        string name
-        timestamp created_at
-        timestamp updated_at
-        boolean is_locked
-        boolean is_starred
-    }
+// 标签组
+interface TabGroup {
+  id: string;          // 唯一标识符
+  name: string;        // 标签组名称
+  tabs: Tab[];         // 标签页列表
+  isLocked: boolean;   // 是否锁定
+  createdAt: number;   // 创建时间戳
+  updatedAt: number;   // 更新时间戳
+}
 
-    TABS {
-        uuid id PK
-        uuid group_id FK
-        string url
-        string title
-        string favicon_url
-        timestamp added_at
-        integer position
-    }
+// 用户
+interface User {
+  id: string;          // 唯一标识符
+  name?: string;       // 用户名称
+  wechatId?: string;   // 微信ID
+  avatar?: string;     // 头像URL
+}
 
-    USERS ||--o{ TAB_GROUPS : has
-    TAB_GROUPS ||--o{ TABS : contains
+// 设置
+interface Settings {
+  autoSyncEnabled: boolean;       // 是否启用自动同步
+  autoSyncInterval: number;       // 自动同步间隔(分钟)
+  openInNewTab: boolean;          // 恢复标签时是否在新标签页打开
+  defaultGroupName: string;       // 默认标签组名称格式
+  pinPopupWhenCollecting: boolean;// 收集标签时是否固定弹出窗口
+}
 ```
 
-## 通信模式
+### 存储结构
 
-1. **REST API 通信**
+在Chrome本地存储中的数据组织:
 
-   - 标准 HTTP 方法 (GET, POST, PUT, DELETE)
-   - JSON 请求/响应格式
-   - 通过 Authorization 头部进行 JWT 认证
-   - 版本化 API 端点
+```
+chrome.storage.local = {
+  "tabGroups": TabGroup[],             // 所有标签组
+  "settings": Settings,                // 用户设置
+  "lastSync": number,                  // 上次同步时间戳
+  "user": User | null,                 // 当前登录用户
+  "offlineOperations": Operation[],    // 离线操作队列
+}
+```
 
-2. **微信 OAuth 流程**
+### 数据同步策略
 
-   - 标准 OAuth 2.0 授权码流程
-   - 基于二维码的认证
-   - 用户信息的令牌交换
+系统采用"离线优先"策略处理数据同步:
 
-3. **数据同步**
-   - 拉取式同步 (客户端发起)
-   - 基于时间戳的冲突解决
-   - 批量操作以提高效率
+1. **本地优先**: 所有操作首先在本地执行和保存
+2. **后台同步**: 登录状态下，变更会自动同步到云端
+3. **冲突解决**: 采用"最后写入获胜"策略，可通过时间戳比较
+4. **离线操作队列**: 网络中断时，操作会进入队列，恢复连接后执行
 
-## 安全模式
+## 主要流程
 
-1. **认证与授权**
+### 1. 标签页收集流程
 
-   - 具有适当过期时间的 JWT 令牌
-   - 所有通信使用 HTTPS
-   - 基于资源的授权
+```mermaid
+sequenceDiagram
+    参与者 User as 用户
+    参与者 UI as 扩展UI
+    参与者 TabManager as 标签管理器
+    参与者 Storage as 存储服务
+    参与者 ChromeAPI as Chrome API
+    参与者 SyncService as 同步服务
+    
+    User->>UI: 点击扩展图标
+    UI->>TabManager: collectTabs()
+    TabManager->>ChromeAPI: chrome.tabs.query()
+    ChromeAPI-->>TabManager: 返回当前标签列表
+    TabManager->>Storage: 保存标签组
+    Storage-->>TabManager: 保存成功
+    TabManager->>ChromeAPI: chrome.tabs.remove()
+    ChromeAPI-->>TabManager: 关闭原标签页
+    TabManager-->>UI: 返回新标签组
+    UI->>UI: 显示成功信息
+    
+    alt 用户已登录
+        TabManager->>SyncService: 触发同步
+        SyncService->>SyncService: 同步到云端
+    end
+```
 
-2. **数据保护**
+### 2. 标签页恢复流程
 
-   - 输入验证
-   - 数据库查询的预处理语句
-   - 扩展的内容安全策略
+```mermaid
+sequenceDiagram
+    参与者 User as 用户
+    参与者 UI as 扩展UI
+    参与者 TabManager as 标签管理器
+    参与者 Storage as 存储服务
+    参与者 ChromeAPI as Chrome API
+    
+    User->>UI: 点击标签或恢复按钮
+    
+    alt 恢复单个标签
+        UI->>TabManager: restoreTab(tabId)
+        TabManager->>Storage: 获取标签信息
+        Storage-->>TabManager: 返回标签数据
+        TabManager->>ChromeAPI: chrome.tabs.create()
+        ChromeAPI-->>TabManager: 新标签页已创建
+        TabManager->>Storage: 更新标签组状态
+    else 恢复整个组
+        UI->>TabManager: restoreGroup(groupId)
+        TabManager->>Storage: 获取标签组
+        Storage-->>TabManager: 返回标签组数据
+        loop 每个标签
+            TabManager->>ChromeAPI: chrome.tabs.create()
+        end
+        TabManager->>Storage: 更新标签组状态
+    end
+    
+    TabManager-->>UI: 返回操作结果
+    UI->>UI: 更新显示
+```
 
-3. **隐私考虑**
-   - 最小数据收集
-   - 用户数据控制
-   - 清晰的隐私政策
+### 3. 登录和数据同步流程
 
-## 错误处理模式
+```mermaid
+sequenceDiagram
+    参与者 User as 用户
+    参与者 UI as 扩展UI
+    参与者 AuthService as 认证服务
+    参与者 SyncService as 同步服务
+    参与者 Storage as 存储服务
+    参与者 API as API服务
+    
+    User->>UI: 点击登录按钮
+    UI->>AuthService: login()
+    AuthService->>AuthService: 启动微信OAuth流程
+    AuthService-->>User: 显示二维码
+    User->>AuthService: 扫描二维码
+    AuthService->>API: 验证用户
+    API-->>AuthService: 返回用户Token
+    AuthService->>Storage: 保存用户信息
+    AuthService-->>UI: 登录成功
+    
+    UI->>SyncService: 初始同步
+    SyncService->>Storage: 获取本地数据
+    Storage-->>SyncService: 返回本地数据
+    SyncService->>API: 获取云端数据
+    API-->>SyncService: 返回云端数据
+    
+    alt 首次登录
+        SyncService->>SyncService: 迁移本地数据到云端
+        SyncService->>API: 上传本地数据
+    else 数据冲突
+        SyncService->>SyncService: 解决冲突
+    end
+    
+    SyncService->>Storage: 更新本地数据
+    SyncService-->>UI: 同步完成
+    UI->>UI: 更新显示
+```
 
-1. **客户端错误处理**
+## 离线与在线模式转换
 
-   - 优雅降级
-   - 网络失败的重试逻辑
-   - 用户友好的错误消息
+系统设计支持两种模式间的无缝转换：
 
-2. **服务器端错误处理**
-   - 结构化错误响应
-   - 适当的 HTTP 状态码
-   - 详细日志记录 (非用户可见)
+### 离线到在线转换 (用户登录)
 
-## 性能模式
+1. 用户完成登录
+2. 系统自动扫描本地数据
+3. 将所有本地数据上传到云端
+4. 若云端已有数据，提供合并选项
+5. 进入在线模式，启用自动同步
 
-1. **客户端优化**
+### 在线到离线转换 (用户登出或网络中断)
 
-   - 高效的 DOM 操作
-   - 频繁访问数据的本地缓存
-   - 防抖/节流的事件处理
+1. 检测到用户登出或网络中断
+2. 系统继续使用本地存储的数据
+3. 所有操作保存到本地
+4. 若为临时网络中断，操作进入离线队列
+5. 网络恢复后自动同步离线操作
 
-2. **服务器优化**
-   - 查询优化
-   - 连接池
-   - 响应压缩
+## 技术实现
+
+### 扩展技术栈
+
+- **框架**: React + TypeScript
+- **状态管理**: React Context API
+- **样式**: TailwindCSS
+- **构建工具**: Vite
+- **Chrome API**: 使用Chrome Extension Manifest V3
+
+### API服务技术栈
+
+- **框架**: Hono.js
+- **数据库**: PostgreSQL (Neon)
+- **ORM**: Prisma
+- **认证**: JWT
+- **部署**: Vercel Serverless
+
+## 安全考虑
+
+1. **数据保护**
+   - 本地数据使用Chrome的隔离存储
+   - 敏感数据不存储在localStorage
+
+2. **认证安全**
+   - 使用微信OAuth进行安全认证
+   - JWT令牌有适当的过期时间
+
+3. **云同步安全**
+   - API端点要求有效的认证令牌
+   - 数据传输使用HTTPS加密
+   - 实施资源隔离，确保用户只能访问自己的数据
+
+## 扩展性与可维护性
+
+系统设计考虑以下扩展性因素:
+
+1. **模块化架构**
+   - 核心组件通过清晰接口分离
+   - 服务可独立升级或替换
+
+2. **插件化功能**
+   - 将高级功能设计为可选插件
+   - 允许根据用户需求定制功能
+
+3. **版本兼容性**
+   - 数据模型包含版本标记
+   - 支持数据模型向前兼容的迁移
+
+4. **测试策略**
+   - 每个核心组件有单元测试
+   - 关键流程有集成测试
+   - 使用模拟服务进行端到端测试
 
 # 系统模式
 

@@ -2,55 +2,56 @@
 
 generator client {
   provider = "prisma-client-js"
+  previewFeatures = ["fullTextSearch", "fullTextIndex"]
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // 用户表
 model User {
-  id            String     @id @default(uuid())
-  wechatOpenId  String     @unique
-  wechatUnionId String?    @unique
-  nickname      String
-  avatarUrl     String
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
-  lastLoginAt   DateTime   @default(now())
-  tabGroups     TabGroup[]
+  id        String   @id @default(uuid())
+  email     String?  @unique
+  wechatId  String?  @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tabGroups TabGroup[]
 
-  @@map("users")
+  @@index([wechatId])
+  @@index([email])
 }
 
 // 标签组表
 model TabGroup {
-  id        String   @id @default(uuid())
-  name      String
-  isLocked  Boolean  @default(false)
-  isStarred Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tabs      Tab[]
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  isLocked    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tabs        Tab[]
 
   @@index([userId])
-  @@map("tab_groups")
+  @@index([name])
 }
 
 // 标签页表
 model Tab {
-  id        String   @id @default(uuid())
-  url       String
-  title     String
-  favicon   String?
-  position  Int
-  addedAt   DateTime @default(now())
-  groupId   String
-  group     TabGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  id          String   @id @default(uuid())
+  title       String
+  url         String
+  favicon     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  tabGroupId  String
+  tabGroup    TabGroup @relation(fields: [tabGroupId], references: [id], onDelete: Cascade)
 
-  @@index([groupId])
-  @@map("tabs")
+  @@index([tabGroupId])
+  @@index([url])
 } 
